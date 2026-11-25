@@ -14,10 +14,33 @@ function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}cat
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 var S={tab:'work',kind:'tasks',showCo:false,showItem:false,companies:load('sh.companies',[]),items:load('sh.items',[]),devs:load('sh.devs',[]),showDev:false,editDev:0,editItem:0,editCo:false,active:load('sh.active',0)};
 var BRAND='<div class="brand noprint"><svg viewBox="0 0 320 110" width="100%" height="110" aria-hidden="true"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff6fa8"/><stop offset="1" stop-color="#ffb84d"/></linearGradient><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4dd0e1"/><stop offset="1" stop-color="#9b6bff"/></linearGradient></defs><g transform="translate(232 8) rotate(12 40 40)"><path d="M40 40 C 10 -8, -14 20, 8 42 C -6 56, 16 80, 40 48 Z" fill="url(#g1)" stroke="#d6336c" stroke-width="2.5" stroke-linejoin="round"/><path d="M40 40 C 70 -8, 94 20, 72 42 C 86 56, 64 80, 40 48 Z" fill="url(#g2)" stroke="#6741d9" stroke-width="2.5" stroke-linejoin="round"/><circle cx="20" cy="30" r="5" fill="#fff" opacity=".8"/><circle cx="60" cy="30" r="5" fill="#fff" opacity=".8"/><path d="M40 30 L40 62" stroke="#3b2a50" stroke-width="5" stroke-linecap="round"/><path d="M40 30 C 36 16, 28 12, 26 8 M40 30 C 44 16, 52 12, 54 8" stroke="#3b2a50" stroke-width="2" fill="none" stroke-linecap="round"/></g><text x="8" y="78" textLength="212" lengthAdjust="spacingAndGlyphs" class="bn" fill="#e8590c" stroke="#862e9c" stroke-width="1">shahira</text><path d="M10 92 C 60 100, 120 86, 200 94" stroke="#20c997" stroke-width="4" fill="none" stroke-linecap="round" stroke-dasharray="2 8"/></svg></div>';
+
+/* ---- backup ---- */
+function makeBackup(){return JSON.stringify({app:'shahira',v:1,at:new Date().toISOString(),pin:load('sh.pin',null),companies:S.companies,items:S.items,devs:S.devs,active:S.active})}
+function exportBackup(msg){
+  var d=new Date(),name='shahira-backup-'+d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)+'.json';
+  var txt=makeBackup(),done=function(m){if(msg)msg.textContent=m};
+  try{var f=new File([txt],name,{type:'application/json'});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:'shahira backup'}).then(function(){done('تمّ ✓ Done')}).catch(function(){done('اتلغى Cancelled')});return}}catch(e){}
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1500);
+  done('الملف اتحفظ في تنزيلات الموبايل ✓ File saved to your Downloads ✓');
+}
+function importBackup(file,msg,confirmFirst){
+  var bad=function(){msg.textContent='ده مش ملف نسخة احتياطية صحيح. This is not a valid backup file.'};
+  var r=new FileReader();r.onerror=bad;r.onload=function(){
+    var o;try{o=JSON.parse(r.result)}catch(e){return bad()}
+    if(!o||o.app!=='shahira'||!o.pin||!o.pin.s||!o.pin.h||!Array.isArray(o.companies)||!Array.isArray(o.items)||!Array.isArray(o.devs))return bad();
+    if(confirmFirst&&!confirm('هيتبدل كل اللي على الموبايل ده بالنسخة دي، وكلمة السر هتبقى كلمة سر النسخة. Everything on this phone will be replaced by the backup, and the password becomes the backup\'s password. Continue?'))return;
+    save('sh.pin',o.pin);save('sh.companies',o.companies);save('sh.items',o.items);save('sh.devs',o.devs);save('sh.active',o.active||0);
+    S.companies=o.companies;S.items=o.items;S.devs=o.devs;S.active=o.active||0;S.tab='work';
+    showLock();setTimeout(function(){var e=$('#err');if(e){e.style.color='#1b5e2c';e.textContent='تمّ الاسترجاع ✓ اكتبي كلمة السر القديمة. Restored ✓ Enter your old password.'}},50)};
+  r.readAsText(file)}
+function backupPage(){return '<h1>نسخة احتياطية · Backup</h1><p>لو عايزة تنقلي التطبيق لموبايل تاني: احفظي نسخة هنا، وفي الموبايل الجديد افتحي التطبيق واختاري "استرجاع". كلمة السر والبيانات هيرجعوا زي ما هم.<br>To move to another phone: save a backup here, then on the new phone open the app and choose Restore. Your password and data come back the same.</p><button class="btn pri" id="bk_save">💾 حفظ / مشاركة نسخة Save / Share backup</button><p class="muted">الملف فيه بياناتك مقروءة (كلمة السر مش مكتوبة فيه، بس مشفّرة). خليه عندك بس. The file holds your data in readable form (the password is not in it in plain text, only its hash). Keep it private.</p><hr><button class="btn" id="bk_load">📂 استرجاع من نسخة Restore from a backup</button><input type="file" id="bk_file" accept=".json,application/json" hidden><p id="bk_msg" class="muted"></p>'}
 /* ---- lock ---- */
 async function showLock(){
   var rec=load('sh.pin',null);var first=!rec;
   $('#app').innerHTML=BRAND+'<div class="card"><h2>'+(first?'اختاري كلمة سر لتطبيقك<br>Choose your password':'أدخلي كلمة السر<br>Enter your password')+'</h2><p class="muted">'+(first?'كلمة السر بتتحفظ على موبايلك بس (مشفّرة) ومحدش يقدر يطّلع عليها. 4 أرقام أو أكتر.<br>Stored only on this phone, hashed. At least 4 characters. This is a simple lock, not strong security.':'')+'</p><input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="كلمة السر Password">'+(first?'<input id="pin2" type="password" inputmode="numeric" autocomplete="off" placeholder="أعيدي كتابتها Repeat password">':'')+'<button class="btn pri" id="go">'+(first?'حفظ Save':'فتح Unlock')+'</button><p id="err" class="err"></p>'+(first?'':'<button class="btn ghost" id="forgot">نسيت كلمة السر؟ Forgot password</button>')+'</div>';
+  if(first){var box=document.createElement('div');box.className='card';box.innerHTML='<p>عندك نسخة احتياطية من موبايل قديم؟<br>Have a backup from another phone?</p><button class="btn" id="rs_btn">📂 استرجاع نسخة Restore a backup</button><input type="file" id="rs_file" accept=".json,application/json" hidden><p id="rs_msg" class="err"></p>';$('#app').appendChild(box);$('#rs_btn').onclick=function(){$('#rs_file').click()};$('#rs_file').onchange=function(){if(this.files[0])importBackup(this.files[0],$('#rs_msg'),false)}}
   $('#go').onclick=async function(){
     var p=$('#pin').value;var err=$('#err');
     if(first){if(p.length<4){err.textContent='قصيرة جداً Too short (4+)';return}if(p!==$('#pin2').value){err.textContent='مش متطابقة Does not match';return}
@@ -28,9 +51,9 @@ async function showLock(){
 /* ---- main ---- */
 function start(){render()}
 function render(){
-  var tabs=[['work','شغلي My Work'],['devs','المطورين Developers'],['plan','الخطة Plan'],['practice','التمارين Practice'],['report','تقرير PDF Report']];
+  var tabs=[['work','شغلي My Work'],['devs','المطورين Developers'],['plan','الخطة Plan'],['practice','التمارين Practice'],['report','تقرير PDF Report'],['backup','نسخة احتياطية Backup']];
   var h=BRAND+'<nav class="noprint">'+tabs.map(function(t){return '<button class="tab'+(S.tab===t[0]?' on':'')+'" data-tab="'+t[0]+'">'+t[1]+'</button>'}).join('')+'</nav>';
-  h+=S.tab==='work'?work():S.tab==='plan'?plan():S.tab==='report'?report():S.tab==='devs'?devs():practice();
+  h+=S.tab==='work'?work():S.tab==='plan'?plan():S.tab==='report'?report():S.tab==='devs'?devs():S.tab==='backup'?backupPage():practice();
   h+='<div class="foot noprint"><button class="btn ghost" id="lock">🔒 قفل Lock</button><button class="btn ghost" id="inst" hidden>⬇ تثبيت Install</button><p class="muted">'+iosHint()+'</p></div>';
   $('#app').innerHTML=h;wire();
 }
@@ -97,6 +120,7 @@ function wire(){
   document.querySelectorAll('[data-df]').forEach(function(b){b.onclick=function(){var a=b.dataset.df.split(':');S.devs.forEach(function(d){if(d.id==a[1])d[a[0]]=!d[a[0]]});save('sh.devs',S.devs);render()}});
   document.querySelectorAll('[data-dtog]').forEach(function(b){b.onclick=function(){S.devs.forEach(function(d){if(d.id==b.dataset.dtog)d.deal=!d.deal});save('sh.devs',S.devs);render()}});
   document.querySelectorAll('[data-ddel]').forEach(function(b){b.onclick=function(){if(!confirm('حذف شركة المطوّر ده؟ Delete this developer company?'))return;S.devs=S.devs.filter(function(d){return d.id!=b.dataset.ddel});save('sh.devs',S.devs);render()}});
+  on('bk_save',function(){exportBackup($('#bk_msg'))});on('bk_load',function(){$('#bk_file').click()});var bf=$('#bk_file');if(bf)bf.onchange=function(){if(this.files[0])importBackup(this.files[0],$('#bk_msg'),true)};
   on('lock',showLock);on('doprint',function(){window.print()});
   if(window.__ip){var e=$('#inst');e.hidden=false;e.onclick=function(){window.__ip.prompt()}}
 }
