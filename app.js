@@ -17,13 +17,23 @@ var BRAND='<div class="brand noprint"><svg viewBox="0 0 320 110" width="100%" he
 
 /* ---- backup ---- */
 function makeBackup(){return JSON.stringify({app:'shahira',v:1,at:new Date().toISOString(),pin:load('sh.pin',null),companies:S.companies,items:S.items,devs:S.devs,active:S.active})}
+
+function lastBk(){return localStorage.getItem('sh.lastbk')||''}
+function markBk(){localStorage.setItem('sh.lastbk',new Date().toISOString())}
+function fmtD(i){if(!i)return 'لسه مفيش never';try{return new Date(i).toLocaleString()}catch(e){return i}}
+function bkDue(){var l=lastBk();return !l||Date.now()-new Date(l).getTime()>864e5}
+function autoCopy(){if(!S.companies.length&&!S.items.length&&!S.devs.length)return;var a=localStorage.getItem('sh.autoat');if(a&&Date.now()-new Date(a).getTime()<=864e5)return;try{var old=localStorage.getItem('sh.auto');if(old)localStorage.setItem('sh.auto2',old);localStorage.setItem('sh.auto',makeBackup());localStorage.setItem('sh.autoat',new Date().toISOString())}catch(e){}}
+function restoreAuto(msg){var t=localStorage.getItem('sh.auto');if(!t){msg.textContent='مفيش نسخة داخل المتصفح لسه. No in-browser copy yet.';return}
+  if(!confirm('هتتبدل بياناتك الحالية بآخر نسخة تلقائية ('+fmtD(localStorage.getItem('sh.autoat'))+'). Replace current data with the last automatic copy?'))return;
+  var o;try{o=JSON.parse(t)}catch(e){msg.textContent='النسخة تالفة. Copy is damaged.';return}
+  save('sh.companies',o.companies);save('sh.items',o.items);save('sh.devs',o.devs);save('sh.active',o.active||0);S.companies=o.companies;S.items=o.items;S.devs=o.devs;S.active=o.active||0;render()}
 function exportBackup(msg){
   var d=new Date(),name='shahira-backup-'+d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)+'.json';
   var txt=makeBackup(),done=function(m){if(msg)msg.textContent=m};
   try{var f=new File([txt],name,{type:'application/json'});
-    if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:'shahira backup'}).then(function(){done('تمّ ✓ Done')}).catch(function(){done('اتلغى Cancelled')});return}}catch(e){}
+    if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:'shahira backup'}).then(function(){markBk();done('تمّ ✓ Done');render()}).catch(function(){done('اتلغى Cancelled')});return}}catch(e){}
   var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1500);
-  done('الملف اتحفظ في تنزيلات الموبايل ✓ File saved to your Downloads ✓');
+  markBk();done('الملف اتحفظ في تنزيلات الموبايل ✓ File saved to your Downloads ✓');setTimeout(render,100);
 }
 function importBackup(file,msg,confirmFirst){
   var bad=function(){msg.textContent='ده مش ملف نسخة احتياطية صحيح. This is not a valid backup file.'};
@@ -35,7 +45,7 @@ function importBackup(file,msg,confirmFirst){
     S.companies=o.companies;S.items=o.items;S.devs=o.devs;S.active=o.active||0;S.tab='work';
     showLock();setTimeout(function(){var e=$('#err');if(e){e.style.color='#1b5e2c';e.textContent='تمّ الاسترجاع ✓ اكتبي كلمة السر القديمة. Restored ✓ Enter your old password.'}},50)};
   r.readAsText(file)}
-function backupPage(){return '<h1>نسخة احتياطية · Backup</h1><p>لو عايزة تنقلي التطبيق لموبايل تاني: احفظي نسخة هنا، وفي الموبايل الجديد افتحي التطبيق واختاري "استرجاع". كلمة السر والبيانات هيرجعوا زي ما هم.<br>To move to another phone: save a backup here, then on the new phone open the app and choose Restore. Your password and data come back the same.</p><button class="btn pri" id="bk_save">💾 حفظ / مشاركة نسخة Save / Share backup</button><p class="muted">الملف فيه بياناتك مقروءة (كلمة السر مش مكتوبة فيه، بس مشفّرة). خليه عندك بس. The file holds your data in readable form (the password is not in it in plain text, only its hash). Keep it private.</p><hr><button class="btn" id="bk_load">📂 استرجاع من نسخة Restore from a backup</button><input type="file" id="bk_file" accept=".json,application/json" hidden><p id="bk_msg" class="muted"></p>'}
+function backupPage(){return '<h1>نسخة احتياطية · Backup</h1><p>لو عايزة تنقلي التطبيق لموبايل تاني: احفظي نسخة هنا، وفي الموبايل الجديد افتحي التطبيق واختاري "استرجاع". كلمة السر والبيانات هيرجعوا زي ما هم.<br>To move to another phone: save a backup here, then on the new phone open the app and choose Restore. Your password and data come back the same.</p><div class="item"><div>آخر نسخة محفوظة Last backup: <b>'+fmtD(lastBk())+'</b></div><div>نسخة تلقائية داخل المتصفح In-browser auto copy: <b>'+fmtD(localStorage.getItem('sh.autoat'))+'</b></div></div><button class="btn pri" id="bk_save">💾 حفظ / مشاركة نسخة Save / Share backup</button><p class="muted">الملف فيه بياناتك مقروءة (كلمة السر مش مكتوبة فيه، بس مشفّرة). خليه عندك بس. The file holds your data in readable form (the password is not in it in plain text, only its hash). Keep it private.</p><p class="muted">التطبيق بيفكّرك كل يوم، ومبيقدرش يحفظ ملف لوحده وهو مقفول. كمان بيحتفظ بنسخة تلقائية جوه المتصفح (بتفيد لو مسحتي حاجة بالغلط، لكن مش لو اتمسحت بيانات المتصفح).<br>The app reminds you daily; a web page cannot save a file by itself while closed. It also keeps an automatic copy inside the browser (helps if you delete something by mistake, but not if browser data is cleared).</p><button class="btn" id="bk_auto">↩ رجّعي آخر نسخة تلقائية Restore last automatic copy</button><hr><button class="btn" id="bk_load">📂 استرجاع من نسخة Restore from a backup</button><input type="file" id="bk_file" accept=".json,application/json" hidden><p id="bk_msg" class="muted"></p>'}
 /* ---- lock ---- */
 async function showLock(){
   var rec=load('sh.pin',null);var first=!rec;
@@ -46,13 +56,14 @@ async function showLock(){
     if(first){if(p.length<4){err.textContent='قصيرة جداً Too short (4+)';return}if(p!==$('#pin2').value){err.textContent='مش متطابقة Does not match';return}
       var salt=crypto.getRandomValues(new Uint8Array(16));save('sh.pin',{s:b64(salt),h:await hashPin(p,salt)});start()}
     else{var h=await hashPin(p,unb64(rec.s));if(h===rec.h)start();else err.textContent='كلمة السر غلط Wrong password'}};
-  var f=$('#forgot');if(f)f.onclick=function(){if(confirm('هيتمسح كل شيء على الموبايل ده! Everything on this phone will be erased. Continue?')){['sh.pin','sh.companies','sh.items','sh.active','sh.devs'].forEach(function(k){localStorage.removeItem(k)});S.companies=[];S.items=[];S.devs=[];S.active=0;showLock()}};
+  var f=$('#forgot');if(f)f.onclick=function(){if(confirm('هيتمسح كل شيء على الموبايل ده! Everything on this phone will be erased. Continue?')){['sh.pin','sh.companies','sh.items','sh.active','sh.devs','sh.auto','sh.auto2','sh.autoat','sh.lastbk'].forEach(function(k){localStorage.removeItem(k)});S.companies=[];S.items=[];S.devs=[];S.active=0;showLock()}};
 }
 /* ---- main ---- */
-function start(){render()}
+function start(){autoCopy();render()}
 function render(){
   var tabs=[['work','شغلي My Work'],['devs','المطورين Developers'],['plan','الخطة Plan'],['practice','التمارين Practice'],['report','تقرير PDF Report'],['backup','نسخة احتياطية Backup']];
-  var h=BRAND+'<nav class="noprint">'+tabs.map(function(t){return '<button class="tab'+(S.tab===t[0]?' on':'')+'" data-tab="'+t[0]+'">'+t[1]+'</button>'}).join('')+'</nav>';
+  var banner=(bkDue()&&!S.snooze&&(S.companies.length||S.items.length||S.devs.length))?'<div class="banner noprint"><b>⏰ وقت النسخة الاحتياطية Time for a backup</b><div>آخر نسخة Last backup: '+fmtD(lastBk())+'</div><button class="btn pri" id="bn_now">💾 احفظي نسخة دلوقتي Save backup now</button><button class="btn ghost" id="bn_later">بعدين Later</button></div>':'';
+  var h=BRAND+banner+'<nav class="noprint">'+tabs.map(function(t){return '<button class="tab'+(S.tab===t[0]?' on':'')+'" data-tab="'+t[0]+'">'+t[1]+'</button>'}).join('')+'</nav>';
   h+=S.tab==='work'?work():S.tab==='plan'?plan():S.tab==='report'?report():S.tab==='devs'?devs():S.tab==='backup'?backupPage():practice();
   h+='<div class="foot noprint"><button class="btn ghost" id="lock">🔒 قفل Lock</button><button class="btn ghost" id="inst" hidden>⬇ تثبيت Install</button><p class="muted">'+iosHint()+'</p></div>';
   $('#app').innerHTML=h;wire();
@@ -120,6 +131,7 @@ function wire(){
   document.querySelectorAll('[data-df]').forEach(function(b){b.onclick=function(){var a=b.dataset.df.split(':');S.devs.forEach(function(d){if(d.id==a[1])d[a[0]]=!d[a[0]]});save('sh.devs',S.devs);render()}});
   document.querySelectorAll('[data-dtog]').forEach(function(b){b.onclick=function(){S.devs.forEach(function(d){if(d.id==b.dataset.dtog)d.deal=!d.deal});save('sh.devs',S.devs);render()}});
   document.querySelectorAll('[data-ddel]').forEach(function(b){b.onclick=function(){if(!confirm('حذف شركة المطوّر ده؟ Delete this developer company?'))return;S.devs=S.devs.filter(function(d){return d.id!=b.dataset.ddel});save('sh.devs',S.devs);render()}});
+  on('bn_now',function(){exportBackup(null)});on('bn_later',function(){S.snooze=true;render()});on('bk_auto',function(){restoreAuto($('#bk_msg'))});
   on('bk_save',function(){exportBackup($('#bk_msg'))});on('bk_load',function(){$('#bk_file').click()});var bf=$('#bk_file');if(bf)bf.onchange=function(){if(this.files[0])importBackup(this.files[0],$('#bk_msg'),true)};
   on('lock',showLock);on('doprint',function(){window.print()});
   if(window.__ip){var e=$('#inst');e.hidden=false;e.onclick=function(){window.__ip.prompt()}}
