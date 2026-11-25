@@ -177,5 +177,7 @@ function wire(){
   if(window.__ip){var e=$('#inst');e.hidden=false;e.onclick=function(){window.__ip.prompt()}}
 }
 window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__ip=e;var b=$('#inst');if(b){b.hidden=false;b.onclick=function(){e.prompt()}}});
-if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').then(function(r){try{r.update()}catch(e){}},function(){});
+window.addEventListener('error',function(ev){var d=document.createElement('div');d.style.cssText='position:fixed;left:0;right:0;bottom:0;background:#b00020;color:#fff;padding:8px;font-size:12px;z-index:99;direction:ltr';d.textContent='Error: '+(ev.message||'')+' ('+(ev.lineno||'')+') v2';document.body.appendChild(d)});
+var vf=document.createElement('div');vf.style.cssText='text-align:center;font-size:11px;color:#6b5b8a;padding:6px';vf.textContent='shahira v2';document.body.appendChild(vf);
 showLock();
