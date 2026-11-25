@@ -19,7 +19,18 @@ var BRAND='<div class="brand noprint"><svg viewBox="0 0 320 110" width="100%" he
 function makeBackup(){return JSON.stringify({app:'shahira',v:1,at:new Date().toISOString(),pin:load('sh.pin',null),companies:S.companies,items:S.items,devs:S.devs,active:S.active})}
 
 function lastBk(){return localStorage.getItem('sh.lastbk')||''}
-function markBk(){localStorage.setItem('sh.lastbk',new Date().toISOString())}
+function markBk(){localStorage.setItem('sh.lastbk',new Date().toISOString());localStorage.setItem('sh.bksig',bkSig())}
+function bkSig(){return JSON.stringify([load('sh.pin',null),S.companies,S.items,S.devs])}
+function bkDirty(){if(!S.companies.length&&!S.items.length&&!S.devs.length)return false;return localStorage.getItem('sh.bksig')!==bkSig()}
+function askLock(){
+  if(!bkDirty()){showLock();return}
+  var m=document.createElement('div');m.className='modal noprint';
+  m.innerHTML='<div class="mbox"><h2>احفظي قبل القفل<br>Save first before locking</h2><p>في تغييرات لسه ما اتحفظتش في ملف نسخة احتياطية.<br>You have changes that are not in a saved backup file.</p><button class="btn pri" id="lk_save">حفظ Save</button></div>';
+  document.body.appendChild(m);
+  var close=function(){m.remove()};
+  m.querySelector('#lk_save').onclick=function(){close();exportBackup(null,function(){showLock()})};
+}
+
 function fmtD(i){if(!i)return 'لسه مفيش never';try{return new Date(i).toLocaleString()}catch(e){return i}}
 function bkDue(){var l=lastBk();return !l||Date.now()-new Date(l).getTime()>864e5}
 function autoCopy(){if(!S.companies.length&&!S.items.length&&!S.devs.length)return;var a=localStorage.getItem('sh.autoat');if(a&&Date.now()-new Date(a).getTime()<=864e5)return;try{var old=localStorage.getItem('sh.auto');if(old)localStorage.setItem('sh.auto2',old);localStorage.setItem('sh.auto',makeBackup());localStorage.setItem('sh.autoat',new Date().toISOString())}catch(e){}}
@@ -27,13 +38,13 @@ function restoreAuto(msg){var t=localStorage.getItem('sh.auto');if(!t){msg.textC
   if(!confirm('هتتبدل بياناتك الحالية بآخر نسخة تلقائية ('+fmtD(localStorage.getItem('sh.autoat'))+'). Replace current data with the last automatic copy?'))return;
   var o;try{o=JSON.parse(t)}catch(e){msg.textContent='النسخة تالفة. Copy is damaged.';return}
   save('sh.companies',o.companies);save('sh.items',o.items);save('sh.devs',o.devs);save('sh.active',o.active||0);S.companies=o.companies;S.items=o.items;S.devs=o.devs;S.active=o.active||0;render()}
-function exportBackup(msg){
+function exportBackup(msg,cb){
   var d=new Date(),name='shahira-backup-'+d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)+'.json';
   var txt=makeBackup(),done=function(m){if(msg)msg.textContent=m};
   try{var f=new File([txt],name,{type:'application/json'});
-    if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:'shahira backup'}).then(function(){markBk();done('تمّ ✓ Done');render()}).catch(function(){done('اتلغى Cancelled')});return}}catch(e){}
+    if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:'shahira backup'}).then(function(){markBk();done('تمّ ✓ Done');if(cb)cb();else render()}).catch(function(){done('اتلغى Cancelled')});return}}catch(e){}
   var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1500);
-  markBk();done('الملف اتحفظ في تنزيلات الموبايل ✓ File saved to your Downloads ✓');setTimeout(render,100);
+  markBk();done('الملف اتحفظ في تنزيلات الموبايل ✓ File saved to your Downloads ✓');if(cb)setTimeout(cb,600);else setTimeout(render,100);
 }
 function importBackup(file,msg,confirmFirst){
   var bad=function(){msg.textContent='ده مش ملف نسخة احتياطية صحيح. This is not a valid backup file.'};
@@ -56,7 +67,7 @@ async function showLock(){
     if(first){if(p.length<4){err.textContent='قصيرة جداً Too short (4+)';return}if(p!==$('#pin2').value){err.textContent='مش متطابقة Does not match';return}
       var salt=crypto.getRandomValues(new Uint8Array(16));save('sh.pin',{s:b64(salt),h:await hashPin(p,salt)});start()}
     else{var h=await hashPin(p,unb64(rec.s));if(h===rec.h)start();else err.textContent='كلمة السر غلط Wrong password'}};
-  var f=$('#forgot');if(f)f.onclick=function(){if(confirm('هيتمسح كل شيء على الموبايل ده! Everything on this phone will be erased. Continue?')){['sh.pin','sh.companies','sh.items','sh.active','sh.devs','sh.auto','sh.auto2','sh.autoat','sh.lastbk'].forEach(function(k){localStorage.removeItem(k)});S.companies=[];S.items=[];S.devs=[];S.active=0;showLock()}};
+  var f=$('#forgot');if(f)f.onclick=function(){if(confirm('هيتمسح كل شيء على الموبايل ده! Everything on this phone will be erased. Continue?')){['sh.pin','sh.companies','sh.items','sh.active','sh.devs','sh.auto','sh.auto2','sh.autoat','sh.lastbk','sh.bksig'].forEach(function(k){localStorage.removeItem(k)});S.companies=[];S.items=[];S.devs=[];S.active=0;showLock()}};
 }
 /* ---- main ---- */
 function start(){autoCopy();render()}
@@ -133,7 +144,7 @@ function wire(){
   document.querySelectorAll('[data-ddel]').forEach(function(b){b.onclick=function(){if(!confirm('حذف شركة المطوّر ده؟ Delete this developer company?'))return;S.devs=S.devs.filter(function(d){return d.id!=b.dataset.ddel});save('sh.devs',S.devs);render()}});
   on('bn_now',function(){exportBackup(null)});on('bn_later',function(){S.snooze=true;render()});on('bk_auto',function(){restoreAuto($('#bk_msg'))});
   on('bk_save',function(){exportBackup($('#bk_msg'))});on('bk_load',function(){$('#bk_file').click()});var bf=$('#bk_file');if(bf)bf.onchange=function(){if(this.files[0])importBackup(this.files[0],$('#bk_msg'),true)};
-  on('lock',showLock);on('doprint',function(){window.print()});
+  on('lock',askLock);on('doprint',function(){window.print()});
   if(window.__ip){var e=$('#inst');e.hidden=false;e.onclick=function(){window.__ip.prompt()}}
 }
 window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__ip=e;var b=$('#inst');if(b){b.hidden=false;b.onclick=function(){e.prompt()}}});
