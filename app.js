@@ -143,16 +143,24 @@ async function showLock(){if(H.on&&H.pushed){H.pushed=false;H.skip++;try{history
   var f=$('#forgot');if(f)f.onclick=function(){if(confirm('هيتمسح كل شيء على الموبايل ده! Everything on this phone will be erased. Continue?')){['sh.pin','sh.companies','sh.items','sh.active','sh.devs','sh.auto','sh.auto2','sh.autoat','sh.lastbk','sh.bksig'].forEach(function(k){localStorage.removeItem(k)});try{indexedDB.deleteDatabase('shahira-files')}catch(e){}S.companies=[];S.items=[];S.devs=[];S.active=0;showLock()}};
 }
 /* ---- main ---- */
-var H={on:false,pushed:false,skip:0};
+var H={on:false,pushed:false,skip:0,init:false,atBase:false,tm:0};
 var HOME=JSON.stringify(['work',false,0,false,0,false,false,false]);
 function viewSig(){return JSON.stringify([S.tab,!!S.showItem,S.editItem||0,!!S.showDev,S.editDev||0,!!S.showCo,!!S.editCo,!!document.querySelector('.modal')])}
+function resetView(){var m=document.querySelector('.modal');if(m)m.remove();S.tab='work';S.showItem=false;S.editItem=0;S.showDev=false;S.editDev=0;S.showCo=false;S.editCo=false}
 function hist(){if(!H.on)return;var home=viewSig()===HOME;
-  try{if(!home&&!H.pushed){history.pushState({sh:1},'');H.pushed=true}
+  try{if(!home&&!H.pushed){H.atBase=false;clearTimeout(H.tm);history.pushState({sh:2},'');H.pushed=true}
   else if(home&&H.pushed){H.pushed=false;H.skip++;history.back()}}catch(e){}}
-window.addEventListener('popstate',function(){if(H.skip>0){H.skip--;return}if(!H.on)return;
-  H.pushed=false;var m=document.querySelector('.modal');if(m)m.remove();
-  S.tab='work';S.showItem=false;S.editItem=0;S.showDev=false;S.editDev=0;S.showCo=false;S.editCo=false;render()});
-function start(){autoCopy();H.on=true;H.pushed=false;S.tab='work';S.showItem=false;S.editItem=0;S.showDev=false;S.editDev=0;S.showCo=false;S.editCo=false;render()}
+function toast(){var t=document.getElementById('exit_toast');if(t)t.remove();t=document.createElement('div');t.id='exit_toast';t.style.cssText='position:fixed;left:12px;right:12px;bottom:24px;background:#1b1340;color:#fff;border:3px solid #ffb300;border-radius:14px;padding:12px;text-align:center;font-weight:700;z-index:90';t.innerHTML='اضغطي رجوع مرة تانية للخروج<br>Press back again to exit';document.body.appendChild(t)}
+function ensureSent(){if(H.init)return;if(navigator.userActivation&&!navigator.userActivation.isActive){var f=function(){document.removeEventListener('pointerdown',f,true);ensureSent()};document.addEventListener('pointerdown',f,true);return}
+  H.init=true;try{history.replaceState({sh:0},'');history.pushState({sh:1},'')}catch(e){H.init=false}}
+window.addEventListener('popstate',function(e){var idx=(e.state&&e.state.sh)||0;
+  if(H.skip>0){H.skip--;if(idx===0&&H.on&&viewSig()===HOME){try{history.pushState({sh:1},'')}catch(x){}}return}
+  if(!H.init)return;
+  if(idx===1){H.atBase=false;clearTimeout(H.tm);var tt=document.getElementById('exit_toast');if(tt)tt.remove();if(H.on){H.pushed=false;if(viewSig()!==HOME){resetView();render()}}return}
+  if(idx===0){var wasHome=!H.on||(viewSig()===HOME&&!H.pushed);H.pushed=false;
+    if(H.on&&!wasHome){resetView();render();try{history.pushState({sh:1},'')}catch(x){}return}
+    toast();H.atBase=true;clearTimeout(H.tm);H.tm=setTimeout(function(){var tt=document.getElementById('exit_toast');if(tt)tt.remove();if(H.atBase){H.atBase=false;try{history.forward()}catch(x){}}},2500)}});
+function start(){autoCopy();H.on=true;H.pushed=false;S.tab='work';S.showItem=false;S.editItem=0;S.showDev=false;S.editDev=0;S.showCo=false;S.editCo=false;ensureSent();render()}
 function render(){
   var tabs=[['work','شغلي My Work'],['devs','المطورين Developers'],['plan','الخطة Plan'],['practice','التمارين Practice'],['report','تقرير PDF Report'],['backup','نسخة احتياطية Backup']];
   var banner=(bkDue()&&!S.snooze&&(S.companies.length||S.items.length||S.devs.length))?'<div class="banner noprint"><b>⏰ وقت النسخة الاحتياطية Time for a backup</b><div>آخر نسخة Last backup: '+fmtD(lastBk())+'</div><button class="btn pri" id="bn_now">💾 احفظي نسخة دلوقتي Save backup now</button><button class="btn ghost" id="bn_later">بعدين Later</button></div>':'';
@@ -247,6 +255,6 @@ function wire(){
 }
 window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__ip=e;var b=$('#inst');if(b){b.hidden=false;b.onclick=function(){e.prompt()}}});
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').then(function(r){try{r.update().catch(function(){})}catch(e){}},function(){});
-window.addEventListener('error',function(ev){var d=document.createElement('div');d.style.cssText='position:fixed;left:0;right:0;bottom:0;background:#b00020;color:#fff;padding:8px;font-size:12px;z-index:99;direction:ltr';d.textContent='Error: '+(ev.message||'')+' ('+(ev.lineno||'')+') v6';document.body.appendChild(d)});
-var vf=document.createElement('div');vf.style.cssText='text-align:center;font-size:11px;color:#6b5b8a;padding:6px';vf.textContent='shahira v6';document.body.appendChild(vf);
+window.addEventListener('error',function(ev){var d=document.createElement('div');d.style.cssText='position:fixed;left:0;right:0;bottom:0;background:#b00020;color:#fff;padding:8px;font-size:12px;z-index:99;direction:ltr';d.textContent='Error: '+(ev.message||'')+' ('+(ev.lineno||'')+') v7';document.body.appendChild(d)});
+var vf=document.createElement('div');vf.style.cssText='text-align:center;font-size:11px;color:#6b5b8a;padding:6px';vf.textContent='shahira v7';document.body.appendChild(vf);
 showLock();
