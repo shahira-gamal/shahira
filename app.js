@@ -8,7 +8,34 @@ var $=function(s){return document.querySelector(s)};
 var enc=new TextEncoder();
 function b64(buf){return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)))}
 function unb64(s){return Uint8Array.from(atob(s),function(c){return c.charCodeAt(0)})}
-async function hashPin(pin,salt){var k=await crypto.subtle.importKey('raw',enc.encode(pin),'PBKDF2',false,['deriveBits']);return b64(await crypto.subtle.deriveBits({name:'PBKDF2',salt:salt,iterations:150000,hash:'SHA-256'},k,256))}
+var SHA_K=new Int32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+var SHA_IV=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+function shaCompress(H,W){var w=new Int32Array(64),i,a,b,c,d,e,f,g,h,t1,t2,s0,s1;for(i=0;i<16;i++)w[i]=W[i];
+ for(i=16;i<64;i++){s0=((w[i-15]>>>7)|(w[i-15]<<25))^((w[i-15]>>>18)|(w[i-15]<<14))^(w[i-15]>>>3);s1=((w[i-2]>>>17)|(w[i-2]<<15))^((w[i-2]>>>19)|(w[i-2]<<13))^(w[i-2]>>>10);w[i]=(w[i-16]+s0+w[i-7]+s1)|0}
+ a=H[0];b=H[1];c=H[2];d=H[3];e=H[4];f=H[5];g=H[6];h=H[7];
+ for(i=0;i<64;i++){s1=((e>>>6)|(e<<26))^((e>>>11)|(e<<21))^((e>>>25)|(e<<7));t1=(h+s1+((e&f)^(~e&g))+SHA_K[i]+w[i])|0;s0=((a>>>2)|(a<<30))^((a>>>13)|(a<<19))^((a>>>22)|(a<<10));t2=(s0+((a&b)^(a&c)^(b&c)))|0;h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0}
+ H[0]=(H[0]+a)|0;H[1]=(H[1]+b)|0;H[2]=(H[2]+c)|0;H[3]=(H[3]+d)|0;H[4]=(H[4]+e)|0;H[5]=(H[5]+f)|0;H[6]=(H[6]+g)|0;H[7]=(H[7]+h)|0}
+function shaBytes(H,bytes,prevLen){var n=bytes.length,total=prevLen+n,len=((n+9+63)>>6)<<6,buf=new Uint8Array(len),W=new Int32Array(16),i,j;buf.set(bytes);buf[n]=0x80;var bits=total*8;buf[len-4]=(bits>>>24)&255;buf[len-3]=(bits>>>16)&255;buf[len-2]=(bits>>>8)&255;buf[len-1]=bits&255;
+ for(i=0;i<len;i+=64){for(j=0;j<16;j++)W[j]=(buf[i+4*j]<<24)|(buf[i+4*j+1]<<16)|(buf[i+4*j+2]<<8)|buf[i+4*j+3];shaCompress(H,W)}}
+function shaOut(H){var o=new Uint8Array(32),i;for(i=0;i<8;i++){o[4*i]=H[i]>>>24;o[4*i+1]=(H[i]>>>16)&255;o[4*i+2]=(H[i]>>>8)&255;o[4*i+3]=H[i]&255}return o}
+function jsPbkdf2(pwd,salt,iters){var key=pwd;if(key.length>64){var Hk=new Int32Array(SHA_IV);shaBytes(Hk,key,0);key=shaOut(Hk)}
+ var ip=new Uint8Array(64),op=new Uint8Array(64),i,j;for(i=0;i<64;i++){var kb=i<key.length?key[i]:0;ip[i]=kb^0x36;op[i]=kb^0x5c}
+ var Hi=new Int32Array(SHA_IV),Ho=new Int32Array(SHA_IV);shaBytes(Hi,ip,0);Hi=new Int32Array(SHA_IV);var Wp=new Int32Array(16);
+ var blk=function(b){for(var q=0;q<16;q++)Wp[q]=(b[4*q]<<24)|(b[4*q+1]<<16)|(b[4*q+2]<<8)|b[4*q+3]};
+ blk(ip);shaCompress(Hi,Wp);blk(op);shaCompress(Ho,Wp);
+ var s1=new Uint8Array(salt.length+4);s1.set(salt);s1[salt.length+3]=1;
+ var H=new Int32Array(Hi);shaBytes(H,s1,64);var U=shaOut(H);
+ H=new Int32Array(Ho);shaBytes(H,U,64);U=shaOut(H);var T=new Int32Array(8);
+ var uw=new Int32Array(8);for(j=0;j<8;j++){uw[j]=(U[4*j]<<24)|(U[4*j+1]<<16)|(U[4*j+2]<<8)|U[4*j+3];T[j]=uw[j]}
+ var W=new Int32Array(16);for(i=1;i<iters;i++){
+  W.fill(0);for(j=0;j<8;j++)W[j]=uw[j];W[8]=0x80000000|0;W[15]=768;var Hh=new Int32Array(Hi);shaCompress(Hh,W);
+  for(j=0;j<8;j++)W[j]=Hh[j];W[8]=0x80000000|0;for(j=9;j<15;j++)W[j]=0;W[15]=768;Hh=new Int32Array(Ho);shaCompress(Hh,W);
+  for(j=0;j<8;j++){uw[j]=Hh[j];T[j]^=Hh[j]}}
+ var out=new Uint8Array(32);for(j=0;j<8;j++){out[4*j]=T[j]>>>24;out[4*j+1]=(T[j]>>>16)&255;out[4*j+2]=(T[j]>>>8)&255;out[4*j+3]=T[j]&255}return out}
+
+function normDigits(p){return String(p).replace(/[\u0660-\u0669]/g,function(c){return c.charCodeAt(0)-1632}).replace(/[\u06F0-\u06F9]/g,function(c){return c.charCodeAt(0)-1776})}
+async function hashPin(pin,salt){var data=enc.encode(pin);try{if(window.crypto&&crypto.subtle){var k=await crypto.subtle.importKey('raw',data,'PBKDF2',false,['deriveBits']);return b64(await crypto.subtle.deriveBits({name:'PBKDF2',salt:salt,iterations:150000,hash:'SHA-256'},k,256))}}catch(e){}return b64(jsPbkdf2(data,salt,150000))}
+function rndSalt(){var a=new Uint8Array(16);try{crypto.getRandomValues(a)}catch(e){for(var i=0;i<16;i++)a[i]=Math.floor(Math.random()*256)}return a}
 function load(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
 function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){alert('تعذر الحفظ Could not save');return false}}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
@@ -63,10 +90,12 @@ async function showLock(){
   $('#app').innerHTML=BRAND+'<div class="card"><h2>'+(first?'اختاري كلمة سر لتطبيقك<br>Choose your password':'أدخلي كلمة السر<br>Enter your password')+'</h2><p class="muted">'+(first?'كلمة السر بتتحفظ على موبايلك بس (مشفّرة) ومحدش يقدر يطّلع عليها. 4 أرقام أو أكتر.<br>Stored only on this phone, hashed. At least 4 characters. This is a simple lock, not strong security.':'')+'</p><input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="كلمة السر Password">'+(first?'<input id="pin2" type="password" inputmode="numeric" autocomplete="off" placeholder="أعيدي كتابتها Repeat password">':'')+'<button class="btn pri" id="go">'+(first?'حفظ Save':'فتح Unlock')+'</button><p id="err" class="err"></p>'+(first?'':'<button class="btn ghost" id="forgot">نسيت كلمة السر؟ Forgot password</button>')+'</div>';
   if(first){var box=document.createElement('div');box.className='card';box.innerHTML='<p>عندك نسخة احتياطية من موبايل قديم؟<br>Have a backup from another phone?</p><button class="btn" id="rs_btn">📂 استرجاع نسخة Restore a backup</button><input type="file" id="rs_file" accept=".json,application/json" hidden><p id="rs_msg" class="err"></p>';$('#app').appendChild(box);$('#rs_btn').onclick=function(){$('#rs_file').click()};$('#rs_file').onchange=function(){if(this.files[0])importBackup(this.files[0],$('#rs_msg'),false)}}
   $('#go').onclick=async function(){
-    var p=$('#pin').value;var err=$('#err');
-    if(first){if(p.length<4){err.textContent='قصيرة جداً Too short (4+)';return}if(p!==$('#pin2').value){err.textContent='مش متطابقة Does not match';return}
-      var salt=crypto.getRandomValues(new Uint8Array(16));save('sh.pin',{s:b64(salt),h:await hashPin(p,salt)});start()}
-    else{var h=await hashPin(p,unb64(rec.s));if(h===rec.h)start();else err.textContent='كلمة السر غلط Wrong password'}};
+    var err=$('#err');err.textContent='';
+    try{var raw=$('#pin').value;var p=normDigits(raw);
+    if(first){if(p.length<4){err.textContent='قصيرة جداً Too short (4+)';return}if(p!==normDigits($('#pin2').value)){err.textContent='مش متطابقة Does not match';return}
+      var salt=rndSalt();save('sh.pin',{s:b64(salt),h:await hashPin(p,salt)});start()}
+    else{var h=await hashPin(p,unb64(rec.s));if(h!==rec.h&&raw!==p)h=(await hashPin(raw,unb64(rec.s)));if(h===rec.h)start();else err.textContent='كلمة السر غلط Wrong password'}}
+    catch(e){err.textContent='حصل خطأ، جربي تاني Something went wrong, try again'}};
   var f=$('#forgot');if(f)f.onclick=function(){if(confirm('هيتمسح كل شيء على الموبايل ده! Everything on this phone will be erased. Continue?')){['sh.pin','sh.companies','sh.items','sh.active','sh.devs','sh.auto','sh.auto2','sh.autoat','sh.lastbk','sh.bksig'].forEach(function(k){localStorage.removeItem(k)});S.companies=[];S.items=[];S.devs=[];S.active=0;showLock()}};
 }
 /* ---- main ---- */
