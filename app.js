@@ -53,7 +53,7 @@ function askLock(){
   if(!bkDirty()){showLock();return}
   var m=document.createElement('div');m.className='modal noprint';
   m.innerHTML='<div class="mbox"><h2>احفظي قبل القفل<br>Save first before locking</h2><p>في تغييرات لسه ما اتحفظتش في ملف نسخة احتياطية.<br>You have changes that are not in a saved backup file.</p><button class="btn pri" id="lk_save">حفظ Save</button></div>';
-  document.body.appendChild(m);
+  document.body.appendChild(m);hist();
   var close=function(){m.remove()};
   m.querySelector('#lk_save').onclick=function(){close();exportBackup(null,function(){showLock()})};
 }
@@ -85,7 +85,7 @@ function importBackup(file,msg,confirmFirst){
   r.readAsText(file)}
 function backupPage(){return '<h1>نسخة احتياطية · Backup</h1><p>لو عايزة تنقلي التطبيق لموبايل تاني: احفظي نسخة هنا، وفي الموبايل الجديد افتحي التطبيق واختاري "استرجاع". كلمة السر والبيانات هيرجعوا زي ما هم.<br>To move to another phone: save a backup here, then on the new phone open the app and choose Restore. Your password and data come back the same.</p><div class="item"><div>آخر نسخة محفوظة Last backup: <b>'+fmtD(lastBk())+'</b></div><div>نسخة تلقائية داخل المتصفح In-browser auto copy: <b>'+fmtD(localStorage.getItem('sh.autoat'))+'</b></div></div><button class="btn pri" id="bk_save">💾 حفظ / مشاركة نسخة Save / Share backup</button><p class="muted">الملف فيه بياناتك مقروءة (كلمة السر مش مكتوبة فيه، بس مشفّرة). خليه عندك بس. The file holds your data in readable form (the password is not in it in plain text, only its hash). Keep it private.</p><p class="muted">التطبيق بيفكّرك كل يوم، ومبيقدرش يحفظ ملف لوحده وهو مقفول. كمان بيحتفظ بنسخة تلقائية جوه المتصفح (بتفيد لو مسحتي حاجة بالغلط، لكن مش لو اتمسحت بيانات المتصفح).<br>The app reminds you daily; a web page cannot save a file by itself while closed. It also keeps an automatic copy inside the browser (helps if you delete something by mistake, but not if browser data is cleared).</p><button class="btn" id="bk_auto">↩ رجّعي آخر نسخة تلقائية Restore last automatic copy</button><hr><button class="btn" id="bk_load">📂 استرجاع من نسخة Restore from a backup</button><input type="file" id="bk_file" accept=".json,application/json" hidden><p id="bk_msg" class="muted"></p>'}
 /* ---- lock ---- */
-async function showLock(){
+async function showLock(){if(H.on&&H.pushed){H.pushed=false;H.skip++;try{history.back()}catch(e){H.skip--}}H.on=false;
   var rec=load('sh.pin',null);var first=!rec;
   $('#app').innerHTML=BRAND+'<div class="card"><h2>'+(first?'اختاري كلمة سر لتطبيقك<br>Choose your password':'أدخلي كلمة السر<br>Enter your password')+'</h2><p class="muted">'+(first?'كلمة السر بتتحفظ على موبايلك بس (مشفّرة) ومحدش يقدر يطّلع عليها. 4 أرقام أو أكتر.<br>Stored only on this phone, hashed. At least 4 characters. This is a simple lock, not strong security.':'')+'</p><input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="كلمة السر Password">'+(first?'<input id="pin2" type="password" inputmode="numeric" autocomplete="off" placeholder="أعيدي كتابتها Repeat password">':'')+'<button class="btn pri" id="go">'+(first?'حفظ Save':'فتح Unlock')+'</button><p id="err" class="err"></p>'+(first?'':'<button class="btn ghost" id="forgot">نسيت كلمة السر؟ Forgot password</button>')+'</div>';
   if(first){var box=document.createElement('div');box.className='card';box.innerHTML='<p>عندك نسخة احتياطية من موبايل قديم؟<br>Have a backup from another phone?</p><button class="btn" id="rs_btn">📂 استرجاع نسخة Restore a backup</button><input type="file" id="rs_file" accept=".json,application/json" hidden><p id="rs_msg" class="err"></p>';$('#app').appendChild(box);$('#rs_btn').onclick=function(){$('#rs_file').click()};$('#rs_file').onchange=function(){if(this.files[0])importBackup(this.files[0],$('#rs_msg'),false)}}
@@ -99,14 +99,23 @@ async function showLock(){
   var f=$('#forgot');if(f)f.onclick=function(){if(confirm('هيتمسح كل شيء على الموبايل ده! Everything on this phone will be erased. Continue?')){['sh.pin','sh.companies','sh.items','sh.active','sh.devs','sh.auto','sh.auto2','sh.autoat','sh.lastbk','sh.bksig'].forEach(function(k){localStorage.removeItem(k)});S.companies=[];S.items=[];S.devs=[];S.active=0;showLock()}};
 }
 /* ---- main ---- */
-function start(){autoCopy();render()}
+var H={on:false,pushed:false,skip:0};
+var HOME=JSON.stringify(['work',false,0,false,0,false,false,false]);
+function viewSig(){return JSON.stringify([S.tab,!!S.showItem,S.editItem||0,!!S.showDev,S.editDev||0,!!S.showCo,!!S.editCo,!!document.querySelector('.modal')])}
+function hist(){if(!H.on)return;var home=viewSig()===HOME;
+  try{if(!home&&!H.pushed){history.pushState({sh:1},'');H.pushed=true}
+  else if(home&&H.pushed){H.pushed=false;H.skip++;history.back()}}catch(e){}}
+window.addEventListener('popstate',function(){if(H.skip>0){H.skip--;return}if(!H.on)return;
+  H.pushed=false;var m=document.querySelector('.modal');if(m)m.remove();
+  S.tab='work';S.showItem=false;S.editItem=0;S.showDev=false;S.editDev=0;S.showCo=false;S.editCo=false;render()});
+function start(){autoCopy();H.on=true;H.pushed=false;S.tab='work';S.showItem=false;S.editItem=0;S.showDev=false;S.editDev=0;S.showCo=false;S.editCo=false;render()}
 function render(){
   var tabs=[['work','شغلي My Work'],['devs','المطورين Developers'],['plan','الخطة Plan'],['practice','التمارين Practice'],['report','تقرير PDF Report'],['backup','نسخة احتياطية Backup']];
   var banner=(bkDue()&&!S.snooze&&(S.companies.length||S.items.length||S.devs.length))?'<div class="banner noprint"><b>⏰ وقت النسخة الاحتياطية Time for a backup</b><div>آخر نسخة Last backup: '+fmtD(lastBk())+'</div><button class="btn pri" id="bn_now">💾 احفظي نسخة دلوقتي Save backup now</button><button class="btn ghost" id="bn_later">بعدين Later</button></div>':'';
   var h=BRAND+banner+'<nav class="noprint">'+tabs.map(function(t){return '<button class="tab'+(S.tab===t[0]?' on':'')+'" data-tab="'+t[0]+'">'+t[1]+'</button>'}).join('')+'</nav>';
   h+=S.tab==='work'?work():S.tab==='plan'?plan():S.tab==='report'?report():S.tab==='devs'?devs():S.tab==='backup'?backupPage():practice();
   h+='<div class="foot noprint"><button class="btn ghost" id="lock">🔒 قفل Lock</button><button class="btn ghost" id="inst" hidden>⬇ تثبيت Install</button><p class="muted">'+iosHint()+'</p></div>';
-  $('#app').innerHTML=h;wire();
+  $('#app').innerHTML=h;wire();hist();
 }
 function iosHint(){var ios=/iphone|ipad/i.test(navigator.userAgent);var sa=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone;if(sa)return '';return ios?'لتثبيت التطبيق: زر المشاركة ثم "إضافة إلى الشاشة الرئيسية". To install: Share, then Add to Home Screen.':'لتثبيت التطبيق: قائمة المتصفح ثم "تثبيت التطبيق" أو "إضافة إلى الشاشة الرئيسية". To install: browser menu, Install app.'}
 function coName(id){var c=S.companies.filter(function(x){return x.id===id})[0];return c?c.name:''}
@@ -123,19 +132,21 @@ function work(){
   h+=HK;
   var EI=S.editItem?S.items.filter(function(i){return i.id===S.editItem})[0]:null;
   if(!S.showItem&&!EI)h+='<button class="btn" id="newitem">＋ إضافة Add '+k.add+'</button>';
-  else h+='<div class="form"><input id="i_title" placeholder="'+k.hint+'" value="'+esc(EI&&EI.title)+'"><label>'+k.dl+'<input id="i_date" type="date" value="'+esc(EI&&EI.date)+'"></label><label>الساعة Time (9:30)<input id="i_time" inputmode="numeric" maxlength="5" placeholder="9:30" value="'+esc(EI&&EI.time)+'"></label><div class="row"><button class="chip'+((EI&&EI.ap==='PM')?'':' on')+'" data-ap="AM" id="ap_am">صباحاً AM</button><button class="chip'+((EI&&EI.ap==='PM')?' on':'')+'" data-ap="PM" id="ap_pm">مساءً PM</button></div>'+(S.companies.length?'<label>الشركة (اختياري) Company (optional)<select id="i_co"><option value="0">— بدون — None</option>'+S.companies.map(function(c){return '<option value="'+c.id+'"'+(EI&&EI.co===c.id?' selected':'')+'>'+esc(c.name)+'</option>'}).join('')+'</select></label>':'')+'<input id="i_note" placeholder="ملاحظة Note" value="'+esc(EI&&EI.note)+'"><button class="btn pri" id="saveitem">حفظ Save</button><button class="btn ghost" id="cancelitem">إلغاء Cancel</button></div>';
+  else h+='<div class="form"><input id="i_title" placeholder="'+k.hint+'" value="'+esc(EI&&EI.title)+'">'+dateF(k.dl,'i_date',EI&&EI.date)+'<label>الساعة Time (9:30)<input id="i_time" inputmode="numeric" maxlength="5" placeholder="9:30" value="'+esc(EI&&EI.time)+'"></label><div class="row"><button class="chip'+((EI&&EI.ap==='PM')?'':' on')+'" data-ap="AM" id="ap_am">صباحاً AM</button><button class="chip'+((EI&&EI.ap==='PM')?' on':'')+'" data-ap="PM" id="ap_pm">مساءً PM</button></div>'+(S.companies.length?'<label>الشركة (اختياري) Company (optional)<select id="i_co"><option value="0">— بدون — None</option>'+S.companies.map(function(c){return '<option value="'+c.id+'"'+(EI&&EI.co===c.id?' selected':'')+'>'+esc(c.name)+'</option>'}).join('')+'</select></label>':'')+'<input id="i_note" placeholder="ملاحظة Note" value="'+esc(EI&&EI.note)+'"><button class="btn pri" id="saveitem">حفظ Save</button><button class="btn ghost" id="cancelitem">إلغاء Cancel</button></div>';
   var list=S.items.filter(function(i){return i.kind===S.kind}).sort(function(a,b){return (a.done-b.done)||(a.date||'9').localeCompare(b.date||'9')||((a.ap==='PM')-(b.ap==='PM'))||(tmin(a)-tmin(b))});
   if(!list.length)h+='<p class="muted">'+k.empty+'</p>';
   list.forEach(function(i){var cn=coName(i.co);h+='<div class="item'+(i.done?' done':'')+'"><b>'+esc(i.title)+'</b>'+(cn?'<div class="muted">🏢 '+esc(cn)+'</div>':'')+((i.date||i.time)?'<div dir="ltr">'+esc(i.date)+(i.time?' · '+esc(i.time)+' '+i.ap:'')+'</div>':'')+(i.note?'<div>'+esc(i.note)+'</div>':'')+'<div class="row"><button class="btn" data-done="'+i.id+'">'+(i.done?'رجّعيها Undo':'تمّت Done')+'</button><button class="btn" data-edit="'+i.id+'">تعديل Edit</button><button class="btn del" data-del="'+i.id+'">حذف Delete</button></div></div>'});
   return h;
 }
+function dateF(label,id,val){return '<label>'+label+'<input id="'+id+'" type="date" value="'+esc(val)+'"></label><div class="row"><button type="button" class="chip" data-pick="'+id+'">📅 اختاري اليوم Pick a day</button><button type="button" class="chip" data-clr="'+id+'">✕ مسح Clear</button></div><div class="muted" id="'+id+'_show" dir="ltr">'+(val?esc(val):'لسه ما اتحددش · Not set')+'</div>'}
+function dShow(id){var i=$('#'+id),t=$('#'+id+'_show');if(i&&t)t.textContent=i.value||'لسه ما اتحددش · Not set'}
 function tmin(i){var m=/^(\d{1,2}):?(\d{2})?$/.exec(i.time||'');if(!m)return 0;return (+m[1]%12)*60+(+m[2]||0)}
 var DF=[['signed','تم الامضاء Signed'],['contacted','تم التواصل Contacted'],['oriented','حضور واورينتيشن في الشركة Attended + orientation done']];
 function devs(){
   var h='<h1>شركات المطورين · Developer Companies</h1>';
   var ED=S.editDev?S.devs.filter(function(d){return d.id===S.editDev})[0]:null;
   if(!S.showDev&&!ED)h+='<button class="btn" id="newdev">＋ إضافة مطوّر Add developer</button>';
-  else h+='<div class="form"><input id="d_name" placeholder="اسم شركة المطوّر Developer name" value="'+esc(ED&&ED.name)+'"><input id="d_contact" placeholder="جهة الاتصال / تليفون Contact / phone" value="'+esc(ED&&ED.contact)+'"><input id="d_note" placeholder="المشروعات / ملاحظة Projects / note" value="'+esc(ED&&ED.note)+'"><label>موعد التواصل المخطط Planned contact day<input id="d_pdate" type="date" value="'+esc(ED&&ED.pdate)+'"></label><label>الساعة Time (9:30)<input id="d_ptime" inputmode="numeric" maxlength="5" placeholder="9:30" value="'+esc(ED&&ED.ptime)+'"></label><div class="row"><button class="chip'+((ED&&ED.pap==='PM')?'':' on')+'" data-dap="AM">صباحاً AM</button><button class="chip'+((ED&&ED.pap==='PM')?' on':'')+'" data-dap="PM">مساءً PM</button></div><div class="row"><button class="chip'+((ED&&!ED.deal)?'':' on')+'" data-dd="1" id="dd_y">نتعامل معاهم We deal</button><button class="chip'+((ED&&!ED.deal)?' on':'')+'" data-dd="0" id="dd_n">لا نتعامل No</button></div><button class="btn pri" id="savedev">حفظ Save</button><button class="btn ghost" id="canceldev">إلغاء Cancel</button></div>';
+  else h+='<div class="form"><input id="d_name" placeholder="اسم شركة المطوّر Developer name" value="'+esc(ED&&ED.name)+'"><input id="d_contact" placeholder="جهة الاتصال / تليفون Contact / phone" value="'+esc(ED&&ED.contact)+'"><input id="d_note" placeholder="المشروعات / ملاحظة Projects / note" value="'+esc(ED&&ED.note)+'">'+dateF('موعد التواصل المخطط Planned contact day','d_pdate',ED&&ED.pdate)+'<label>الساعة Time (9:30)<input id="d_ptime" inputmode="numeric" maxlength="5" placeholder="9:30" value="'+esc(ED&&ED.ptime)+'"></label><div class="row"><button class="chip'+((ED&&ED.pap==='PM')?'':' on')+'" data-dap="AM">صباحاً AM</button><button class="chip'+((ED&&ED.pap==='PM')?' on':'')+'" data-dap="PM">مساءً PM</button></div><div class="row"><button class="chip'+((ED&&!ED.deal)?'':' on')+'" data-dd="1" id="dd_y">نتعامل معاهم We deal</button><button class="chip'+((ED&&!ED.deal)?' on':'')+'" data-dd="0" id="dd_n">لا نتعامل No</button></div><button class="btn pri" id="savedev">حفظ Save</button><button class="btn ghost" id="canceldev">إلغاء Cancel</button></div>';
   var l=S.devs;
   if(!l.length)h+='<p class="muted">مفيش مطورين لسه. No developers yet.</p>';
   l.forEach(function(d){h+='<div class="item'+(d.deal?' deal':'')+'"><b>'+esc(d.name)+'</b>'+(d.contact?'<div dir="ltr">'+esc(d.contact)+'</div>':'')+(d.note?'<div>'+esc(d.note)+'</div>':'')+((d.pdate||d.ptime)?'<div class="plan" dir="ltr">موعد التواصل Planned contact: '+esc(d.pdate)+(d.ptime?' · '+esc(d.ptime)+' '+(d.pap||'AM'):'')+'</div>':'')+'<div class="row">'+DF.map(function(f){return '<button class="chip'+(d[f[0]]?' on':'')+'" data-df="'+f[0]+':'+d.id+'">'+(d[f[0]]?'✓ ':'○ ')+f[1]+'</button>'}).join('')+'</div><div class="row"><button class="chip'+(d.deal?' on':'')+'" data-dtog="'+d.id+'">'+(d.deal?'✓ نتعامل معاهم We deal with them (اختياري optional)':'✗ لا نتعامل No deal (اختياري optional)')+'</button><button class="btn" data-dedit="'+d.id+'">تعديل Edit</button><button class="btn del" data-ddel="'+d.id+'">حذف Delete</button></div></div>'});
@@ -154,6 +165,9 @@ function wire(){
   document.querySelectorAll('[data-tab]').forEach(function(b){b.onclick=function(){S.tab=b.dataset.tab;render()}});
   document.querySelectorAll('[data-co]').forEach(function(b){b.onclick=function(){S.active=+b.dataset.co;S.showCo=false;save('sh.active',S.active);render()}});
   document.querySelectorAll('[data-kind]').forEach(function(b){b.onclick=function(){S.kind=b.dataset.kind;S.showItem=false;render()}});
+  document.querySelectorAll('[data-pick]').forEach(function(b){var id=b.dataset.pick;b.onclick=function(){var i=$('#'+id);try{if(i.showPicker)i.showPicker();else{i.focus();i.click()}}catch(e){try{i.focus();i.click()}catch(e2){}}}});
+  document.querySelectorAll('[data-clr]').forEach(function(b){var id=b.dataset.clr;b.onclick=function(){var i=$('#'+id);i.value='';dShow(id)}});
+  ['i_date','d_pdate'].forEach(function(id){var i=$('#'+id);if(i){i.onchange=function(){dShow(id)};i.oninput=function(){dShow(id)}}});
   var v=function(id){return $('#'+id).value.trim()};
   var on=function(id,f){var e=$('#'+id);if(e)e.onclick=f};
   on('newco',function(){S.showCo=true;S.editCo=false;render()});on('cancelco',function(){S.showCo=false;S.editCo=false;render()});on('editco',function(){S.editCo=true;S.showCo=false;render();window.scrollTo(0,0)});
@@ -177,6 +191,6 @@ function wire(){
 }
 window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__ip=e;var b=$('#inst');if(b){b.hidden=false;b.onclick=function(){e.prompt()}}});
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').then(function(r){try{r.update().catch(function(){})}catch(e){}},function(){});
-window.addEventListener('error',function(ev){var d=document.createElement('div');d.style.cssText='position:fixed;left:0;right:0;bottom:0;background:#b00020;color:#fff;padding:8px;font-size:12px;z-index:99;direction:ltr';d.textContent='Error: '+(ev.message||'')+' ('+(ev.lineno||'')+') v3';document.body.appendChild(d)});
-var vf=document.createElement('div');vf.style.cssText='text-align:center;font-size:11px;color:#6b5b8a;padding:6px';vf.textContent='shahira v3';document.body.appendChild(vf);
+window.addEventListener('error',function(ev){var d=document.createElement('div');d.style.cssText='position:fixed;left:0;right:0;bottom:0;background:#b00020;color:#fff;padding:8px;font-size:12px;z-index:99;direction:ltr';d.textContent='Error: '+(ev.message||'')+' ('+(ev.lineno||'')+') v4';document.body.appendChild(d)});
+var vf=document.createElement('div');vf.style.cssText='text-align:center;font-size:11px;color:#6b5b8a;padding:6px';vf.textContent='shahira v4';document.body.appendChild(vf);
 showLock();
